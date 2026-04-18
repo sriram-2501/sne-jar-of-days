@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Jar of Days</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background: linear-gradient(to right, #e3f2fd, #ffffff);
+    }
+
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .jar {
+      width: 300px;
+      height: 500px;
+      padding: 15px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.3);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      overflow-y: auto;
+      transition: transform 0.2s ease;
+    }
+
+    .paper {
+      background: white;
+      margin: 10px 0;
+      padding: 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .paper:hover {
+      transform: scale(1.05);
+    }
+
+    img {
+      width: 100%;
+      max-height: 200px;
+      object-fit: cover;
+      margin-top: 8px;
+      border-radius: 8px;
+    }
+
+    #modal, #archiveModal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #modalContent, #archiveContent {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      width: 300px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    textarea {
+      width: 100%;
+      height: 80px;
+      resize: none;
+      margin-bottom: 10px;
+    }
+
+    button {
+      padding: 6px 10px;
+      border: none;
+      border-radius: 6px;
+      background: #2196f3;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1976d2;
+    }
+
+    .dateItem {
+      padding: 5px;
+      cursor: pointer;
+    }
+
+    .dateItem:hover {
+      background: #f0f0f0;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div>
+    <h2>Future Jar</h2>
+    <div class="jar" id="leftJar"></div>
+  </div>
+
+  <div>
+    <h2>
+      Memory Jar
+      <button onclick="openArchive()">📜</button>
+      <button onclick="showAll()">All</button>
+    </h2>
+    <div class="jar" id="rightJar"></div>
+  </div>
+
+  <!-- Entry Modal -->
+  <div id="modal">
+    <div id="modalContent">
+      <textarea id="text" placeholder="Write your day..."></textarea>
+      <input type="file" id="imageInput"><br><br>
+      <button id="saveBtn">Save</button>
+<button id="deleteBtn" style="background:#e53935; margin-left:10px;">Delete</button>
+    </div>
+  </div>
+
+  <!-- Archive Modal -->
+  <div id="archiveModal">
+    <div id="archiveContent">
+      <h3>Select Date</h3>
+      <div id="archiveList"></div>
+      <br>
+      <button onclick="closeArchive()">Close</button>
+    </div>
+  </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+  const leftJar = document.getElementById("leftJar");
+  const rightJar = document.getElementById("rightJar");
+  const modal = document.getElementById("modal");
+  const archiveModal = document.getElementById("archiveModal");
+  const textInput = document.getElementById("text");
+  const imageInput = document.getElementById("imageInput");
+  const saveBtn = document.getElementById("saveBtn");
+  const deleteBtn = document.getElementById("deleteBtn");
+
+  let data = JSON.parse(localStorage.getItem("entries")) || [];
+
+  let today = new Date();
+  let yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+ let todayStr = formatDate(today);
+let yesterdayStr = formatDate(yesterday);
+
+  let editingIndex = null;
+  let selectedDateFilter = null;
+  let selectedDateForNew = null; // 🔑 track which date we are filling
+
+  function render() {
+    leftJar.innerHTML = "";
+    rightJar.innerHTML = "";
+
+    // LEFT JAR → yesterday + today if not filled
+    [yesterdayStr, todayStr].forEach(date => {
+      let exists = data.some(e => e.date === date);
+
+      if (!exists) {
+        let div = document.createElement("div");
+        div.className = "paper";
+        div.innerText = date === todayStr ? "Today's Paper" : "Yesterday's Paper";
+
+        div.onclick = () => openModal(null, date);
+
+        leftJar.appendChild(div);
+      }
+    });
+
+    // RIGHT JAR
+    let displayData = selectedDateFilter
+      ? data.filter(e => e.date === selectedDateFilter)
+      : data;
+
+    displayData.slice().reverse().forEach((item) => {
+      let index = data.indexOf(item);
+
+      let div = document.createElement("div");
+      div.className = "paper";
+
+      div.innerHTML = `<strong>${item.date}</strong><br>${item.text}`;
+
+      if (item.image) {
+        let img = document.createElement("img");
+        img.src = item.image;
+        div.appendChild(img);
+      }
+
+      div.onclick = () => openModal(index, null);
+      rightJar.appendChild(div);
+    });
+  }
+
+  function openModal(index, dateForNew) {
+  editingIndex = index;
+  selectedDateForNew = dateForNew;
+
+  if (index !== null) {
+    textInput.value = data[index].text;
+    deleteBtn.style.display = "inline-block"; // show delete
+  } else {
+    textInput.value = "";
+    deleteBtn.style.display = "none"; // hide delete
+  }
+
+  imageInput.value = "";
+  modal.style.display = "flex";
+}
+
+  function deleteEntry() {
+  if (editingIndex !== null) {
+    data.splice(editingIndex, 1);
+    localStorage.setItem("entries", JSON.stringify(data));
+  }
+
+  closeModal();
+  render();
+}
+
+deleteBtn.addEventListener("click", deleteEntry);
+  function closeModal() {
+    modal.style.display = "none";
+    editingIndex = null;
+    selectedDateForNew = null;
+  }
+
+  function saveEntry() {
+    let text = textInput.value || "Just another day.";
+    let file = imageInput.files[0];
+
+    function finish(imageData) {
+      if (editingIndex !== null) {
+        data[editingIndex].text = text;
+        if (imageData) data[editingIndex].image = imageData;
+      } else {
+        data.push({
+          date: selectedDateForNew,
+          text: text,
+          image: imageData || ""
+        });
+      }
+
+      localStorage.setItem("entries", JSON.stringify(data));
+
+      closeModal();
+      render();
+    }
+
+    if (file) {
+      let reader = new FileReader();
+      reader.onload = e => finish(e.target.result);
+      reader.readAsDataURL(file);
+    } else {
+      finish(null);
+    }
+  }
+
+  // ARCHIVE
+  function openArchive() {
+    const list = document.getElementById("archiveList");
+    list.innerHTML = "";
+
+    let uniqueDates = [...new Set(data.map(e => e.date))].reverse();
+
+    uniqueDates.forEach(date => {
+      let div = document.createElement("div");
+      div.className = "dateItem";
+      div.innerText = date;
+
+      div.onclick = () => {
+        selectedDateFilter = date;
+        closeArchive();
+        render();
+      };
+
+      list.appendChild(div);
+    });
+
+    archiveModal.style.display = "flex";
+  }
+
+  function closeArchive() {
+    archiveModal.style.display = "none";
+  }
+
+  function showAll() {
+    selectedDateFilter = null;
+    render();
+  }
+
+  saveBtn.addEventListener("click", saveEntry);
+
+  render();
+});
+function formatDate(date) {
+  const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  return `${days[date.getDay()]} ${months[date.getMonth()]} ${date.getDate()} ${date.getFullYear()}`;
+}
+
+window.openArchive = openArchive;
+window.closeArchive = closeArchive;
+window.showAll = showAll;
+</script>
+
+</body>
+</html>
